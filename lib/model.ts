@@ -9,8 +9,12 @@
 // Implied value is one function of the snapshot's own figures, the same for every protocol:
 //
 //   base     = tvl_usd x 0.18
-//   growth   = clamp(change_7d, -40, +80) per cent, 0 when unreported
-//   growthM  = 1 + growth / 100 x 0.35
+//   growth   = clamp(change_7d, -40, +120) per cent, 0 when unreported
+//   growthM  = 1 + growth / 100 x 0.50 + kicker, kicker = 0.25 x (growth / 100)^2 when growth > 0
+//              The kicker is convex on purpose: this snapshot's median protocol is down 5.4% on
+//              the week and only 4 of 300 pre-token protocols clear +80%, so a flat linear term
+//              barely separates the growers from the shrinkers; the kicker pays the few protocols
+//              actually gaining TVL, and the +120 cap still tames the +4448% outlier.
 //   age      = days from listed_at to the snapshot date, unknown: 240 days
 //   maturity = 0.70 + 0.30 x ln(1 + age) / ln(1 + 1460)   (a log curve: age pays, then flattens)
 //   breadth  = 1 + 0.02 x min(chains - 1, 5)              (multi-chain reach, capped at +10%)
@@ -47,6 +51,7 @@ export interface Snapshot {
 export interface ModelParams {
   base_multiple: number;
   growth_weight: number;
+  momentum_kicker: number;
   growth_floor: number;
   growth_cap: number;
   maturity_floor: number;
@@ -59,9 +64,10 @@ export interface ModelParams {
 
 export const MODEL: ModelParams = {
   base_multiple: 0.18,
-  growth_weight: 0.35,
+  growth_weight: 0.5,
+  momentum_kicker: 0.25,
   growth_floor: -40,
-  growth_cap: 80,
+  growth_cap: 120,
   maturity_floor: 0.7,
   maturity_span: 0.3,
   maturity_horizon_days: 1460,
@@ -71,7 +77,7 @@ export const MODEL: ModelParams = {
 };
 
 /** The model's version label, shown on the dashboard. */
-export const MODEL_VERSION = 'radar-2';
+export const MODEL_VERSION = 'radar-2.1';
 
 /** How many pre-token protocols below the watchlist floor the early radar carries, by TVL. */
 export const EARLY_ROWS = 160;
@@ -104,7 +110,8 @@ export function impliedValue(p: Protocol, asOf: string, m: ModelParams = MODEL):
   const age = ageDays(asOf, p.listed_at);
   const rawGrowth = typeof p.change_7d === 'number' && Number.isFinite(p.change_7d) ? p.change_7d : 0;
   const growthPct = Math.min(m.growth_cap, Math.max(m.growth_floor, rawGrowth));
-  const growthMult = 1 + (growthPct / 100) * m.growth_weight;
+  const growthMult =
+    1 + (growthPct / 100) * m.growth_weight + (growthPct > 0 ? m.momentum_kicker * (growthPct / 100) ** 2 : 0);
   const ageForModel = age ?? m.unknown_age_days;
   const maturityMult =
     m.maturity_floor + m.maturity_span * (Math.log1p(Math.max(ageForModel, 0)) / Math.log1p(m.maturity_horizon_days));

@@ -88,8 +88,12 @@ writeFileSync(
   }),
 );
 
+const growers = board.filter((r) => r.model.growth_pct > 0).length;
+const topGrowthMult = board.reduce((m, r) => Math.max(m, r.model.growth_multiplier), 0);
+
 process.stdout.write(
   `token radar: ${snapshot.protocols.length} protocols, ${snapshot.watchlist.length} on the watchlist, ${board.length} rows scored (${radar.early_size} early, ${radar.live_size} live set aside)\n` +
     `token radar: top row ${board[0]!.slug} at $${board[0]!.implied_value_usd.toLocaleString('en-US')}, last row ${board[board.length - 1]!.slug} at $${board[board.length - 1]!.implied_value_usd.toLocaleString('en-US')}\n` +
+    `token radar: ${growers} of ${board.length} rows grew on the week; strongest growth multiplier ${topGrowthMult}\n` +
     `token radar: wrote ${join(out, 'board.json')}, ${join(out, 'data.js')}, ${join(out, 'dashboard')} (${dashboardFiles.length} files), ${join(out, 'screenshots')} (${shots.length} images) and ${join(out, 'dossier.json')}\n`,
 );

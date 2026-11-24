@@ -38,7 +38,7 @@
   // arithmetic against the number board.json carries, so the code and the data visibly agree.
   function impliedOf(row, model) {
     var growth = Math.min(model.growth_cap, Math.max(model.growth_floor, row.change_7d === null || row.change_7d === undefined ? 0 : row.change_7d));
-    var growthMult = 1 + (growth / 100) * model.growth_weight;
+    var growthMult = 1 + (growth / 100) * model.growth_weight + (growth > 0 ? model.momentum_kicker * Math.pow(growth / 100, 2) : 0);
     var age = row.age_days === null || row.age_days === undefined ? model.unknown_age_days : row.age_days;
     var maturity = model.maturity_floor + model.maturity_span * (Math.log1p(Math.max(age, 0)) / Math.log1p(model.maturity_horizon_days));
     var extra = Math.min(Math.max((row.chains || []).length - 1, 0), model.breadth_max_extra_chains);
@@ -182,9 +182,9 @@
     var m = DATA.model;
     return '<section class="panel model"><h2>How implied value is computed</h2>' +
       '<p>One function scores every protocol, from the snapshot\'s own figures: its TVL, its seven-day growth, how long it has run with no token on record, and how many chains it runs on. No protocol name is special-cased, and no row is hand-picked.</p>' +
-      '<div class="formula">implied = round( tvl_usd x ' + m.base_multiple + ' x (1 + clamp(change_7d, ' + m.growth_floor + ', ' + m.growth_cap + ') / 100 x ' + m.growth_weight + ') x (' + m.maturity_floor + ' + ' + m.maturity_span + ' x ln(1 + age_days) / ln(1 + ' + m.maturity_horizon_days + ')) x (1 + ' + m.breadth_per_chain + ' x min(chains - 1, ' + m.breadth_max_extra_chains + ')) )</div>' +
-      '<div class="consts"><span>base multiple <b>' + m.base_multiple + '</b></span><span>growth weight <b>' + m.growth_weight + '</b></span><span>growth clamp <b>' + m.growth_floor + ' to ' + m.growth_cap + '</b></span><span>maturity <b>' + m.maturity_floor + ' + ' + m.maturity_span + ' log</b></span><span>horizon <b>' + m.maturity_horizon_days + ' days</b></span><span>unknown age <b>' + m.unknown_age_days + ' days</b></span><span>per extra chain <b>+' + (m.breadth_per_chain * 100) + '%</b></span></div>' +
-      '<p>Age is the time since the protocol was first listed, the best record of how long it has run with no token; an unlisted age uses ' + m.unknown_age_days + ' days. Growth is clamped so one hot week cannot crown a protocol, and the log curve lets age pay without letting the oldest protocol win on age alone.</p>' +
+      '<div class="formula">implied = round( tvl_usd x ' + m.base_multiple + ' x (1 + clamp(change_7d, ' + m.growth_floor + ', ' + m.growth_cap + ') / 100 x ' + m.growth_weight + ' + ' + m.momentum_kicker + ' x max(0, clamp(change_7d, ' + m.growth_floor + ', ' + m.growth_cap + ') / 100)^2) x (' + m.maturity_floor + ' + ' + m.maturity_span + ' x ln(1 + age_days) / ln(1 + ' + m.maturity_horizon_days + ')) x (1 + ' + m.breadth_per_chain + ' x min(chains - 1, ' + m.breadth_max_extra_chains + ')) )</div>' +
+      '<div class="consts"><span>base multiple <b>' + m.base_multiple + '</b></span><span>growth weight <b>' + m.growth_weight + '</b></span><span>momentum kicker <b>' + m.momentum_kicker + '</b></span><span>growth clamp <b>' + m.growth_floor + ' to ' + m.growth_cap + '</b></span><span>maturity <b>' + m.maturity_floor + ' + ' + m.maturity_span + ' log</b></span><span>horizon <b>' + m.maturity_horizon_days + ' days</b></span><span>unknown age <b>' + m.unknown_age_days + ' days</b></span><span>per extra chain <b>+' + (m.breadth_per_chain * 100) + '%</b></span></div>' +
+      '<p>Age is the time since the protocol was first listed, the best record of how long it has run with no token; an unlisted age uses ' + m.unknown_age_days + ' days. Growth is clamped so one hot week cannot crown a protocol, and the log curve lets age pay without letting the oldest protocol win on age alone. A convex kicker on positive growth rewards the few protocols actually gaining TVL: the median protocol in this snapshot is down 5.4% on the week, so the kicker barely moves most rows.</p>' +
       '</section>';
   }
   function detailHtml(row) {
